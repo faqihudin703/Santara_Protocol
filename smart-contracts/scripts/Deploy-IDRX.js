@@ -1,0 +1,44 @@
+const hre = require("hardhat");
+
+async function main() {
+  console.log("🚀 Starting deployment for IDRXStablecoin...");
+
+  // 1. Ambil Contract Factory
+  const IDRX = await hre.ethers.getContractFactory("IDRXStablecoin");
+
+  // 2. Eksekusi Deploy
+  // (Tidak butuh argumen constructor karena hardcoded di Solidity)
+  const idrx = await IDRX.deploy();
+
+  console.log("⏳ Waiting for deployment...");
+  await idrx.waitForDeployment();
+
+  const address = await idrx.getAddress();
+  console.log("----------------------------------------------------");
+  console.log(`✅ IDRXStablecoin deployed to: ${address}`);
+  console.log("----------------------------------------------------");
+
+  // 3. Verifikasi Contract (Opsional tapi Recommended buat Hackathon)
+  // Tunggu sebentar biar Block explorer index dulu
+  if (network.name === "baseSepolia") {
+    console.log("Waiting for block confirmations...");
+    // await idrx.deploymentTransaction().wait(5); // Tunggu 5 block
+    
+    console.log("Verifying contract...");
+    try {
+      await hre.run("verify:verify", {
+        address: address,
+        constructorArguments: [],
+      });
+      console.log("✅ Contract verified on BaseScan!");
+    } catch (error) {
+      console.log("⚠️ Verification failed:", error.message);
+    }
+  }
+}
+
+// Pattern wajib untuk handle async/error
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
