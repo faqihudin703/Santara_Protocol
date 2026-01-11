@@ -17,4 +17,4 @@ COPY . .
 RUN npm install -g pm2
 
 # Relayer tidak dijalankan sebagai PID 1
-CMD ["pm2-runtime", "start", "index.js", "--name", "relayer"]
+CMD ["pm2-runtime", "start", "index.js", "--name", "oracle"]
