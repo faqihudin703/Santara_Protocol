@@ -17,24 +17,6 @@ async function main() {
   console.log("----------------------------------------------------");
   console.log(`✅ IDRXStablecoin deployed to: ${address}`);
   console.log("----------------------------------------------------");
-
-  // 3. Verifikasi Contract (Opsional tapi Recommended buat Hackathon)
-  // Tunggu sebentar biar Block explorer index dulu
-  if (network.name === "baseSepolia") {
-    console.log("Waiting for block confirmations...");
-    // await idrx.deploymentTransaction().wait(5); // Tunggu 5 block
-    
-    console.log("Verifying contract...");
-    try {
-      await hre.run("verify:verify", {
-        address: address,
-        constructorArguments: [],
-      });
-      console.log("✅ Contract verified on BaseScan!");
-    } catch (error) {
-      console.log("⚠️ Verification failed:", error.message);
-    }
-  }
 }
 
 // Pattern wajib untuk handle async/error
