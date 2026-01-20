@@ -34,6 +34,9 @@ contract NXSYieldVault is
 
     uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
+    
+    uint256 public stakingWindow;
+    uint256 public epochStartTime;
 
     // ================= EVENTS =================
     event Staked(address indexed user, uint256 amount);
@@ -41,12 +44,13 @@ contract NXSYieldVault is
     event RewardPaid(address indexed user, uint256 reward);
     event EpochRewardUpdated(uint256 newReward);
     event EpochDurationUpdated(uint256 newDuration);
+    event StakingWindowUpdated(uint256 newWindow);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
-
+    
     // ================= INITIALIZE =================
     function initialize(address _stakingToken, address _rewardsToken) external initializer {
         require(_stakingToken != address(0) && _rewardsToken != address(0), "Invalid token");
@@ -61,7 +65,9 @@ contract NXSYieldVault is
         // ===== REALISTIC DEFAULT =====
         epochDuration = 1 days;
         epochReward = 5_000 * 1e18;
+        epochStartTime = block.timestamp;
         lastEpochTime = block.timestamp;
+        stakingWindow = 15 minutes;
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(DISTRIBUTOR_ROLE, msg.sender);
@@ -82,6 +88,7 @@ contract NXSYieldVault is
     function _updateEpoch() internal {
         if (_totalSupply == 0) {
             lastEpochTime = block.timestamp;
+            epochStartTime = block.timestamp;
             return;
         }
 
@@ -92,6 +99,7 @@ contract NXSYieldVault is
             uint256 reward = epochs * epochReward;
             rewardPerTokenStored += (reward * 1e18) / _totalSupply;
             lastEpochTime += epochs * epochDuration;
+            epochStartTime = lastEpochTime;
         }
     }
 
@@ -130,6 +138,8 @@ contract NXSYieldVault is
         updateReward(msg.sender)
     {
         require(amount > 0, "Stake zero");
+        
+        require(block.timestamp <= epochStartTime + stakingWindow, "Staking window closed");
 
         _totalSupply += amount;
         _balances[msg.sender] += amount;
@@ -191,9 +201,27 @@ contract NXSYieldVault is
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        require(newDuration >= 1 hours, "Too short");
+        require(newDuration >= 1 minutes && newDuration <= 7 days, "Invalid duration");
+
+        // settle epoch lama
+        _updateEpoch();
+
+        // reset anchor agar epoch baru bersih
+        lastEpochTime = block.timestamp;
+        epochStartTime = block.timestamp;
+
         epochDuration = newDuration;
+
         emit EpochDurationUpdated(newDuration);
+    }
+    
+    function setStakingWindow(uint256 windowSeconds)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(windowSeconds <= epochDuration, "Window > epoch");
+        stakingWindow = windowSeconds;
+        emit StakingWindowUpdated(windowSeconds);
     }
 
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -216,5 +244,5 @@ contract NXSYieldVault is
     }
 
     // ================= STORAGE GAP =================
-    uint256[50] private __gap;
+    uint256[48] private __gap;
 }
