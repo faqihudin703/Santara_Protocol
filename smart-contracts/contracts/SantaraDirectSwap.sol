@@ -44,6 +44,13 @@ contract SantaraDirectSwap is
     uint256 public constant MAX_DELAY = 1 hours;
 
     uint256 private constant SCALE = 1e18;
+    
+    // =========================
+    // FEE DATA
+    // =========================
+    uint256 public swapEthFeeBps;
+    uint256 public swapWSanFeeBps;
+    uint256 public collectedFees;
 
     // =========================
     // EVENTS
@@ -61,6 +68,19 @@ contract SantaraDirectSwap is
         uint256 timestamp
     );
     
+    event EthFeeUpdated(
+        uint256 newFeeBps
+    );
+    
+    event WSanFeeUpdated(
+        uint256 newFeeBps
+    );
+    
+    event FeesWithdrawn(
+        address indexed to,
+        uint256 amount
+    );
+    
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -75,13 +95,21 @@ contract SantaraDirectSwap is
         address _dex,
         address admin,
         address oracle,
-        address treasury
+        address treasury,
+        uint256 _ethFeeBps,
+        uint256 _wSanFeeBps
     ) external initializer {
         require(
             _wSan != address(0) &&
             _idrx != address(0) &&
             _dex != address(0),
             "Invalid address"
+        );
+        
+        require(
+            _ethFeeBps <= 1000 && 
+            _wSanFeeBps <= 1000, 
+            "Fee too high"
         );
 
         __AccessControl_init();
@@ -94,6 +122,9 @@ contract SantaraDirectSwap is
 
         ethToIdrPrice = 50_000_000;
         lastPriceUpdate = block.timestamp;
+        
+        swapEthFeeBps = _ethFeeBps;
+        swapWSanFeeBps = _wSanFeeBps;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ORACLE_ROLE, oracle);
@@ -110,6 +141,16 @@ contract SantaraDirectSwap is
             "Oracle price stale"
         );
     }
+    
+    function _applyFee(uint256 amount, uint256 feeBps) 
+        internal 
+        pure 
+        returns (uint256 net, uint256 fee) 
+    {
+        if (feeBps == 0) return (amount, 0);
+        fee = (amount * feeBps) / 10_000;
+        net = amount - fee;
+    }
 
     // =========================
     // SWAP ETH → IDRX
@@ -123,17 +164,21 @@ contract SantaraDirectSwap is
         require(msg.value > 0, "No ETH sent");
         _checkOracle();
 
-        uint256 amountIDRX = msg.value * ethToIdrPrice;
+        uint256 grossIDRX = msg.value * ethToIdrPrice;
+        
+        (uint256 netIDRX, uint256 fee) = _applyFee(grossIDRX, swapEthFeeBps);
 
-        require(amountIDRX >= minIDRXOut, "Slippage too high");
+        require(netIDRX >= minIDRXOut, "Slippage too high");
         require(
-            idrxToken.balanceOf(address(this)) >= amountIDRX,
+            idrxToken.balanceOf(address(this)) >= grossIDRX,
             "Insufficient IDRX liquidity"
         );
+        
+        if (fee > 0) collectedFees += fee;
 
-        idrxToken.safeTransfer(msg.sender, amountIDRX);
+        idrxToken.safeTransfer(msg.sender, netIDRX);
 
-        emit Swapped(msg.sender, address(0), msg.value, amountIDRX);
+        emit Swapped(msg.sender, address(0), msg.value, netIDRX);
     }
 
     // =========================
@@ -161,18 +206,23 @@ contract SantaraDirectSwap is
         uint256 rate = getWSanRate();
         require(rate > 0, "Invalid rate");
 
-        uint256 amountIDRX = (amountWSAN * rate) / SCALE;
+        uint256 grossIDRX = (amountWSAN * rate) / SCALE;
+        
+        (uint256 netIDRX, uint256 fee) = _applyFee(grossIDRX, swapWSanFeeBps);
 
-        require(amountIDRX >= minIDRXOut, "Slippage too high");
+        require(netIDRX >= minIDRXOut, "Slippage too high");
         require(
-            idrxToken.balanceOf(address(this)) >= amountIDRX,
+            idrxToken.balanceOf(address(this)) >= grossIDRX,
             "Insufficient IDRX liquidity"
         );
 
         wSanToken.safeTransferFrom(msg.sender, address(this), amountWSAN);
-        idrxToken.safeTransfer(msg.sender, amountIDRX);
+        
+        if (fee > 0) collectedFees += fee;
+        
+        idrxToken.safeTransfer(msg.sender, netIDRX);
 
-        emit Swapped(msg.sender, address(wSanToken), amountWSAN, amountIDRX);
+        emit Swapped(msg.sender, address(wSanToken), amountWSAN, netIDRX);
     }
 
     // =========================
@@ -193,6 +243,27 @@ contract SantaraDirectSwap is
 
         emit PriceUpdated(old, newPrice, block.timestamp);
     }
+    
+    // =========================
+    // FEES UPDATE
+    // =========================
+    function updateSwapEthFee(uint256 newFeeBps) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        require(newFeeBps <= 1000, "Fee max 10%");
+        swapEthFeeBps = newFeeBps;
+        emit EthFeeUpdated(newFeeBps);
+    }
+    
+    function updateSwapWSanFee(uint256 newFeeBps) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        require(newFeeBps <= 1000, "Fee max 10%");
+        swapWSanFeeBps = newFeeBps;
+        emit WSanFeeUpdated(newFeeBps);
+    }
 
     // =========================
     // PAUSE
@@ -208,6 +279,19 @@ contract SantaraDirectSwap is
     // =========================
     // TREASURY
     // =========================
+    function withdrawCollectedFees(address to, uint256 amount)
+        external
+        onlyRole(TREASURY_ROLE)
+    {
+        require(amount <= collectedFees, "Exceeds collected fees");
+        
+        collectedFees -= amount;
+        
+        idrxToken.safeTransfer(to, amount);
+        
+        emit FeesWithdrawn(to, amount);
+    }
+    
     function rescueFunds(address token, uint256 amount)
         external
         onlyRole(TREASURY_ROLE)
@@ -215,6 +299,11 @@ contract SantaraDirectSwap is
         if (token == address(0)) {
             payable(msg.sender).transfer(address(this).balance);
         } else {
+            if (token == address(idrxToken)) {
+                uint256 currentBalance = idrxToken.balanceOf(address(this));
+                require(currentBalance >= amount, "Insufficient balance");
+                require(currentBalance - amount >= collectedFees, "Cannot withdraw Fee Reserves via rescueFunds");
+            }
             IERC20Upgradeable(token).safeTransfer(msg.sender, amount);
         }
     }

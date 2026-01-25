@@ -1,0 +1,65 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .stroke-dark { stroke: #565B64; stroke-width: 10; }
+      .fill-orange { fill: #E6881E; }
+      .fill-light { fill: #E6E8ED; }
+      .dashed-arc { 
+        stroke: #BCC2CC; 
+        stroke-width: 7; 
+        stroke-dasharray: 4 12; 
+        stroke-linecap: round;
+        fill: none;
+      }
+    </style>
+  </defs>
+
+  <g transform="translate(256, 256)">
+    
+    <circle cx="0" cy="0" r="78" class="fill-light" stroke="#565B64" stroke-width="8"/>
+    
+    <g transform="scale(0.9) translate(0, 5)">
+      <path d="M0 -55 L30 0 L0 18 L-30 0 Z" class="fill-orange"/>
+      <path d="M0 25 L30 0 L0 45 L-30 0 Z" class="fill-orange"/>
+    </g>
+
+    <g transform="rotate(0)">
+      <path d="M-10 -95 L10 -95 L10 -125 L20 -125 L0 -150 L-20 -125 L-10 -125 Z" class="fill-orange"/>
+      <circle cx="0" cy="-190" r="35" stroke="#565B64" stroke-width="8" fill="white"/>
+      <circle cx="0" cy="-190" r="16" class="fill-orange"/>
+    </g>
+
+    <g transform="rotate(60)">
+      <path d="M-10 -95 L10 -95 L10 -125 L20 -125 L0 -150 L-20 -125 L-10 -125 Z" class="fill-orange"/>
+      <circle cx="0" cy="-190" r="35" stroke="#565B64" stroke-width="8" fill="white"/>
+      <circle cx="0" cy="-190" r="16" class="fill-orange"/>
+    </g>
+
+    <g transform="rotate(120)">
+      <path d="M-10 -95 L10 -95 L10 -125 L20 -125 L0 -150 L-20 -125 L-10 -125 Z" class="fill-orange"/>
+      <path d="M-46 -225 A 60 60 0 0 1 46 -225" class="dashed-arc"/>
+      <circle cx="0" cy="-190" r="35" stroke="#565B64" stroke-width="8" fill="white"/>
+      <circle cx="0" cy="-190" r="16" class="fill-orange"/>
+    </g>
+
+    <g transform="rotate(180)">
+      <path d="M-10 -95 L10 -95 L10 -125 L20 -125 L0 -150 L-20 -125 L-10 -125 Z" class="fill-orange"/>
+      <circle cx="0" cy="-190" r="35" stroke="#565B64" stroke-width="8" fill="white"/>
+      <circle cx="0" cy="-190" r="16" class="fill-orange"/>
+    </g>
+
+    <g transform="rotate(240)">
+      <path d="M-10 -95 L10 -95 L10 -125 L20 -125 L0 -150 L-20 -125 L-10 -125 Z" class="fill-orange"/>
+      <circle cx="0" cy="-190" r="35" stroke="#565B64" stroke-width="8" fill="white"/>
+      <circle cx="0" cy="-190" r="16" class="fill-orange"/>
+    </g>
+
+    <g transform="rotate(300)">
+      <path d="M-10 -95 L10 -95 L10 -125 L20 -125 L0 -150 L-20 -125 L-10 -125 Z" class="fill-orange"/>
+      <path d="M-46 -225 A 60 60 0 0 1 46 -225" class="dashed-arc"/>
+      <circle cx="0" cy="-190" r="35" stroke="#565B64" stroke-width="8" fill="white"/>
+      <circle cx="0" cy="-190" r="16" class="fill-orange"/>
+    </g>
+
+  </g>
+</svg>

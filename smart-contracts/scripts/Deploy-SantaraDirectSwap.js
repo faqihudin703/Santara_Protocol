@@ -10,6 +10,9 @@ async function main() {
   const IDRX_ADDRESS = "0x...."; // Address IDRXStablecoin
   
   const ORACLE_WALLET_ADDRESS = "0x....";
+  
+  const ETH_FEE_BPS = 30;
+  const WSAN_FEE_BPS = 15;
 
   console.log("----------------------------------------------------");
   console.log("📦 Preparing SantaraDirectSwap (Enterprise Version)...");
@@ -17,8 +20,8 @@ async function main() {
   const SantaraSwap = await ethers.getContractFactory("SantaraDirectSwap");
 
   // Argumen Initialize:
-  // 1. _wSan, 2. _idrx, 3. _dex, 
-  // 4. admin, 5. oracle, 6. treasury
+  // 1. _wSan, 2. _idrx, 3. _dex, 4. admin,
+  // 5. oracle, 6. treasury, 7. _ethFeeBps, 8. _wSanFeeBps
   // Kita set admin, oracle, treasury ke Deployer semua biar simpel demo-nya
   const args = [
     WSAN_ADDRESS,
@@ -26,7 +29,9 @@ async function main() {
     DEX_ADDRESS,
     deployer.address, // Admin
     ORACLE_WALLET_ADDRESS, // Oracle
-    deployer.address  // Treasury
+    deployer.address,  // Treasury
+    ETH_FEE_BPS,
+    WSAN_FEE_BPS
   ];
 
   const swapProxy = await upgrades.deployProxy(SantaraSwap, args, { 

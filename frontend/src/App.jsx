@@ -1,5 +1,12 @@
 import { useState } from 'react'
 import { useAccount } from 'wagmi'
+import { 
+  LayoutGrid,      // Home
+  ArrowRightLeft,  // Swap
+  Vault,           // Vault
+  Banknote,        // Redeem
+  Wallet
+} from 'lucide-react'
 
 import Navbar from './components/Navbar'
 import IndoAlert from './components/IndoAlert'
@@ -18,34 +25,37 @@ function App() {
   const isCoinbase = connector?.id === 'coinbaseWallet' || connector?.name?.toLowerCase().includes('coinbase')
 
   const showIndoAlert = isBlocked && (!isConnected || isCoinbase)
-
-  const TabButton = ({ id, label, icon }) => (
+  
+  //Tab Button
+  const TabButton = ({ id, label, icon: Icon }) => (
     <button
       onClick={() => setActiveTab(id)}
       className={`
         flex-shrink-0
         whitespace-nowrap
-        px-5 py-3
+        px-3 py-2 
+        text-xs 
+        md:px-5 md:py-2.5 
+        md:text-sm
         rounded-full
-        font-bold
-        text-sm
-        min-w-[110px]
+        font-semibold
         transition-all duration-300
-        flex items-center justify-center gap-2
+        flex items-center justify-center gap-1.5 md:gap-2
+        border
         ${
           activeTab === id
-            ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]'
-            : 'text-gray-400 hover:text-white hover:bg-white/10'
+            ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/30'
+            : 'bg-transparent text-gray-400 border-transparent hover:text-white hover:bg-gray-800'
         }
       `}
     >
-      <span>{icon}</span>
+      <Icon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${activeTab === id ? 'text-white' : 'text-gray-500'}`} />
       {label}
     </button>
   )
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-blue-500/30 pb-20">
+    <div className="min-h-screen bg-[#0a0b0d] text-white font-sans selection:bg-blue-500/30 pb-20">
 
       {/* ALERT */}
       {showIndoAlert && (
@@ -57,59 +67,67 @@ function App() {
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
 
-        {/* ================= MOBILE NAV ================= */}
-        <div className="relative mb-8 md:hidden">
-          <div className="overflow-x-auto overflow-y-hidden touch-pan-x">
+        {/* ================= NAVIGATION BAR (Mobile & Desktop Unified Style) ================= */}
+        <div className="flex justify-center mb-8 relative z-10">
+          <div className="
+            overflow-x-auto 
+            overflow-y-hidden 
+            touch-pan-x 
+            no-scrollbar
+            w-full
+            flex justify-center
+          ">
             <div className="
-              neon-card
-              p-2
-              rounded-full
-              flex
-              gap-2
-              min-w-max
-              bg-black/40
-              border border-white/10
+              flex 
+              gap-1
+              md:gap-1.5
+              p-1.5 
+              bg-[#12141a] 
+              border border-gray-800 
+              rounded-full 
+              shadow-2xl
+              max-w-full
             ">
-              <TabButton id="home" label="Home" icon="🏠" />
-              <TabButton id="swap" label="Swap" icon="💱" />
-              <TabButton id="vault" label="Vault" icon="🏦" />
-              <TabButton id="redeem" label="Redeem" icon="🔥" />
+              <TabButton id="home" label="Home" icon={LayoutGrid} />
+              <TabButton id="swap" label="Swap" icon={ArrowRightLeft} />
+              <TabButton id="vault" label="Vault" icon={Vault} />
+              <TabButton id="redeem" label="Redeem" icon={Banknote} />
             </div>
           </div>
         </div>
 
-        {/* ================= DESKTOP NAV ================= */}
-        <div className="relative mb-10 hidden md:flex justify-center">
-          <div className="
-            neon-card
-            p-2
-            rounded-full
-            flex
-            gap-2
-            bg-black/40
-            border border-white/10
-          ">
-            <TabButton id="home" label="Home" icon="🏠" />
-            <TabButton id="swap" label="Swap" icon="💱" />
-            <TabButton id="vault" label="Vault" icon="🏦" />
-            <TabButton id="redeem" label="Redeem" icon="🔥" />
-          </div>
-        </div>
-
-        {/* ================= CONTENT ================= */}
+        {/* ================= CONTENT AREA ================= */}
         <div
           className={`transition-all duration-500 ${
             showIndoAlert
-              ? 'opacity-50 grayscale pointer-events-none'
+              ? 'opacity-50 grayscale pointer-events-none blur-sm'
               : 'opacity-100'
           }`}
         >
-          {activeTab === 'home' && <HomeView setTab={setActiveTab} />}
-
+          {activeTab === 'home' && (
+             <div className="animate-in fade-in zoom-in-95 duration-300">
+                <HomeView setTab={setActiveTab} />
+             </div>
+          )}
+          
           <div className="mx-auto w-full max-w-sm sm:max-w-md">
-            {activeTab === 'swap' && <SwapCard />}
-            {activeTab === 'vault' && <VaultCard />}
-            {activeTab === 'redeem' && <RedeemCard />}
+            {activeTab === 'swap' && (
+              <div className="animate-in slide-in-from-bottom-4 duration-300">
+                <SwapCard />
+              </div>
+            )}
+            
+            {activeTab === 'vault' && (
+              <div className="animate-in slide-in-from-bottom-4 duration-300">
+                <VaultCard />
+              </div>
+            )}
+            
+            {activeTab === 'redeem' && (
+              <div className="animate-in slide-in-from-bottom-4 duration-300">
+                <RedeemCard />
+              </div>
+            )}
           </div>
         </div>
 

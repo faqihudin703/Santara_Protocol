@@ -9,6 +9,17 @@ import {
 import { parseUnits, formatEther } from 'viem'
 import { useQueryClient } from '@tanstack/react-query'
 import { CONTRACTS, ABIS } from '../config'
+import { 
+  TrendingUp, 
+  Lock, 
+  Timer, 
+  Info, 
+  Wallet, 
+  Loader2,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight
+} from 'lucide-react'
 
 const format2 = (value) => {
   if (!value) return '0.00'
@@ -66,6 +77,13 @@ export default function VaultCard() {
     functionName: 'allowance',
     args: [address, CONTRACTS.VAULT],
     query: { enabled: !!address && !!amount },
+  })
+  
+  const { data: idrxWalletBalance } = useReadContract({
+    address: CONTRACTS.IDRX,
+    abi: ABIS.ERC20,
+    functionName: 'balanceOf',
+    args: [address],
   })
 
   /* ========= EPOCH (GLOBAL) ========= */
@@ -293,152 +311,181 @@ export default function VaultCard() {
     if (isSuccess) return 
     queryClient.invalidateQueries()
     setAmount('')
+    setLastAction(null)
   }, [isSuccess])
 
   /* ========= UI ========= */
   return (
-    <div className="neon-card glow-purple rounded-3xl p-6">
-      <h2 className="text-xl font-bold text-purple-400 mb-6">
-        Stake IDRX & Earn NXS
-      </h2>
+    <div className="bg-[#12141a] border border-gray-800 rounded-3xl p-4 md:p-6 shadow-2xl relative overflow-hidden font-sans">
+      
+      {/* HEADER WITH DECORATION */}
+      <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+        <Lock className="w-40 h-40" />
+      </div>
 
-      {/* TOP GRID */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="bg-black/60 p-4 rounded-xl">
-          <p className="text-xs text-gray-500">Your Staked IDRX</p>
-          <p className="font-mono text-lg">
-            {staked ? format2(formatEther(staked)) : '0.0'} IDRX
-          </p>
+      <div className="flex items-center gap-3 mb-6 relative z-10">
+        <div className="w-10 h-10 bg-purple-900/30 rounded-xl flex items-center justify-center border border-purple-500/30 shadow-lg shadow-purple-900/20">
+          <TrendingUp className="w-5 h-5 text-purple-400" />
         </div>
-
-        <div className="bg-purple-900/10 p-4 rounded-xl">
-          <p className="text-xs text-purple-300">
-            Claimable Rewards (NXS)
-          </p>
-          <p className="font-mono text-xl text-purple-200">
-            {earned ? format2(formatEther(earned)) : '0.0'} NXS
-          </p>
+        <div>
+          <h2 className="text-lg font-bold text-white tracking-tight">NXS Vault</h2>
+          <p className="text-xs text-gray-500 font-medium">Auto-compounding Yield</p>
         </div>
       </div>
 
-      {/* ESTIMATED PROGRESS BAR */}
-      <div className="bg-purple-900/10 p-4 rounded-xl mb-4">
-        <div className="flex justify-between text-xs text-purple-300 mb-2">
-          <span>Estimated Rewards (This Epoch)</span>
-          <span>{format2(formatEther(estimatedReward))} NXS
-          {isMaxed && ( 
-            <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
-              MAX
-            </span>
-          )}
+      {/* --- STATS GRID (PORTFOLIO) --- */}
+      <div className="grid grid-cols-2 gap-3 mb-4 relative z-10">
+        {/* STAKED */}
+        <div className="bg-[#0a0b0d] p-4 rounded-2xl border border-gray-800 hover:border-purple-500/30 transition duration-300">
+           <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold uppercase mb-1">
+             <Lock className="w-3 h-3 text-purple-500" /> Staked Balance
+           </div>
+           <div className="font-mono text-lg font-bold text-white truncate">
+             {staked ? format2(formatEther(staked)) : '0.00'} <span className="text-xs text-gray-500 font-sans">IDRX</span>
+           </div>
+        </div>
+
+        {/* EARNED (CLAIMABLE) */}
+        <div className="bg-purple-900/10 p-4 rounded-2xl border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+           <div className="flex items-center gap-1.5 text-[10px] text-purple-300 font-bold uppercase mb-1">
+             <TrendingUp className="w-3 h-3" /> Unclaimed Yield
+           </div>
+           <div className="font-mono text-lg font-bold text-purple-200 truncate">
+             {earned ? format2(formatEther(earned)) : '0.00'} <span className="text-xs text-purple-400/70 font-sans">NXS</span>
+           </div>
+        </div>
+      </div>
+
+      {/* --- PROGRESS BAR (REALTIME ESTIMATION) --- */}
+      <div className="bg-[#0a0b0d] p-4 rounded-2xl border border-gray-800 mb-6 relative overflow-hidden group">
+        <div className="flex justify-between items-center text-xs text-gray-400 mb-3 relative z-10">
+          <span className="flex items-center gap-1.5 font-medium">
+             <Timer className="w-3.5 h-3.5 text-blue-400" /> Current Epoch Rewards
+          </span>
+          <span className="font-mono text-white font-bold">
+            {format2(formatEther(estimatedReward))} NXS
+            {isMaxed && ( 
+              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/20">
+                MAX
+              </span>
+            )}
           </span>
         </div>
 
-        <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
+        {/* Bar Container */}
+        <div className="w-full h-2.5 bg-[#1c1f26] rounded-full overflow-hidden relative z-10">
           <div
-            className="h-full bg-purple-500 transition-[width] duration-500 ease-out"
+            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)] transition-[width] duration-700 ease-out relative"
             style={{ width: `${rewardProgressPct}%` }}
-          />
-        </div>
-
-        <p className="text-[10px] text-gray-500 mt-2">
-          {isMaxed
-            ? 'Max rewards reached for this epoch'
-            : 'Estimated • Based on current stake share • Synced with blockchain time'}
-        </p>
-      </div>
-
-      {/* BOTTOM GRID */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-black/60 p-4 rounded-xl">
-          <p className="text-xs text-gray-500">Reward per Period</p>
-          <p className="text-purple-300">
-            {epochReward
-              ? `${format2(formatEther(epochReward))} NXS`
-              : '--'}
-          </p>
-        </div>
-
-        <div className="bg-black/60 p-4 rounded-xl">
-          <p className="text-xs text-gray-500">
-            Next Vault Reward Update In
-          </p>
-          <p className="text-purple-300">{nextEpochIn}</p>
-        </div>
-        
-        <div className="bg-black/60 p-4 rounded-xl">
-          <p className="text-xs text-gray-500">Staking</p>
-          {isStakingOpen ? (
-            <p className="text-green-400">Open</p>
-          ) : (
-            <p className="text-red-400">Closed</p>
-          )}
-        </div>
-        
-        <div className="bg-black/60 p-4 rounded-xl">
-          <p className="text-xs text-gray-500">
-          {isStakingOpen
-            ? 'Staking Closes In'
-            : 'Staking Opens In'}
-          </p>
-          <p
-            className={`font-mono ${
-              isStakingOpen
-                ? 'text-orange-400'
-                : 'text-purple-400'
-            }`}
           >
-            {stakingCountdown
-              ? formatDuration(stakingCountdown.remaining)
-              : '--'}
-          </p>
+              {/* Shimmer Effect */}
+              <div className="absolute top-0 left-0 bottom-0 right-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-full -translate-x-full animate-[shimmer_2s_infinite]"></div>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center mt-3 text-[10px] text-gray-500 relative z-10">
+             <span>{Math.floor(rewardProgressPct)}% accumulated</span>
+             <span className="flex items-center gap-1">
+                Epoch ends in <span className="text-gray-300 font-mono">{nextEpochIn}</span>
+             </span>
         </div>
       </div>
 
-      {/* INPUT */}
-      <input
-        type="number"
-        placeholder="Enter Amount to Stake (IDRX)"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        disabled={isTxRunning || !isStakingOpen}
-        className="cyber-input mb-4"
-      />
+      {/* --- INFO GRID (DETAILS) --- */}
+      <div className="grid grid-cols-2 gap-3 mb-6 text-[10px]">
+        <div className="bg-[#1c1f26] p-3 rounded-xl flex flex-col gap-1 border border-gray-800">
+           <span className="text-gray-500 font-semibold uppercase">Reward Rate</span>
+           <span className="text-gray-300 font-mono text-xs">
+              {epochReward ? format2(formatEther(epochReward)) : '--'} NXS/Epoch
+           </span>
+        </div>
 
-      {/* ACTIONS */}
+        <div className="bg-[#1c1f26] p-3 rounded-xl flex flex-col gap-1 border border-gray-800">
+           <span className="text-gray-500 font-semibold uppercase flex justify-between">
+              Staking Status 
+              {isStakingOpen ? <span className="text-green-400 font-bold">OPEN</span> : <span className="text-red-400 font-bold">CLOSED</span>}
+           </span>
+           <span className={`font-mono text-xs ${isStakingOpen ? 'text-green-300' : 'text-orange-400'}`}>
+              {isStakingOpen ? 'Closes in ' : 'Opens in '} 
+              {stakingCountdown ? formatDuration(stakingCountdown.remaining) : '--'}
+           </span>
+        </div>
+      </div>
+
+      {/* --- INPUT STAKE --- */}
+      <div className="bg-[#0a0b0d] p-4 rounded-2xl border border-gray-800 mb-4 focus-within:border-purple-500/50 transition">
+         <div className="flex justify-between text-xs text-gray-400 mb-2">
+            <span>Stake Amount</span>
+            <span className="flex items-center gap-1">
+               <Wallet className="w-3 h-3" /> Bal: <span className="text-white font-mono">
+                 {idrxWalletBalance ? format2(formatEther(idrxWalletBalance)) : '0.00'}
+              </span>
+            </span>
+         </div>
+         <div className="flex items-center justify-between">
+            <input
+               type="number"
+               placeholder="0.0"
+               value={amount}
+               onChange={(e) => setAmount(e.target.value)}
+               disabled={isTxRunning || !isStakingOpen}
+               className="bg-transparent text-2xl font-mono text-white outline-none w-full placeholder:text-gray-700 disabled:opacity-50"
+            />
+            <button 
+               onClick={() => setAmount(idrxWalletBalance ? formatEther(idrxWalletBalance) : '')}
+               disabled={isTxRunning || !isStakingOpen}
+               className="text-[10px] font-bold bg-[#1c1f26] text-purple-400 px-2 py-1 rounded hover:bg-[#252a33] transition"
+            >
+               MAX
+            </button>
+         </div>
+      </div>
+
+      {/* --- MAIN ACTION BUTTON --- */}
       <button
         onClick={handleStake}
         disabled={!amount || !isStakingOpen || isTxRunning}
-        className={`action-btn mb-3 ${
+        className={`w-full py-4 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center justify-center gap-2 mb-4 ${
           isStakingOpen
-            ? 'bg-purple-600'
-            : 'bg-gray-700 cursor-not-allowed'
+            ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/20'
+            : 'bg-[#1c1f26] text-gray-500 cursor-not-allowed border border-gray-800'
         }`}
       >
-        {!isStakingOpen
-          ? 'Staking Closed'
-          : needsApproval
-            ? 'Allow IDRX'
-            : 'Start Earning'}
+        {isTxRunning && (lastAction === 'stake' || lastAction === 'approve') ? (
+           <>
+             <Loader2 className="w-4 h-4 animate-spin" />
+             Processing...
+           </>
+        ) : !isStakingOpen ? (
+           'Staking Window Closed'
+        ) : needsApproval ? (
+           'Approve IDRX Usage'
+        ) : (
+           'Confirm Deposit'
+        )}
       </button>
 
-      <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/10">
+      {/* --- SECONDARY ACTIONS (HARVEST / EXIT) --- */}
+      <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-800">
         <button
           onClick={handleHarvest}
           disabled={!hasReward || isTxRunning}
-          className="action-btn bg-green-600"
+          className="py-3 rounded-xl font-bold text-xs bg-[#0a0b0d] border border-green-900/30 text-green-400 hover:bg-green-900/10 hover:border-green-500/50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Claim Reward
+          {isTxRunning && lastAction === 'harvest' ? <Loader2 className="w-3 h-3 animate-spin"/> : <CheckCircle2 className="w-3 h-3"/>}
+          Claim Rewards
         </button>
 
         <button
           onClick={handleExit}
           disabled={isTxRunning}
-          className="action-btn bg-red-900/30 text-red-400"
+          className="py-3 rounded-xl font-bold text-xs bg-[#0a0b0d] border border-red-900/30 text-red-400 hover:bg-red-900/10 hover:border-red-500/50 transition flex items-center justify-center gap-2 disabled:opacity-50"
         >
+           {isTxRunning && lastAction === 'exit' ? <Loader2 className="w-3 h-3 animate-spin"/> : <ArrowRight className="w-3 h-3"/>}
           Withdraw All
         </button>
       </div>
+
     </div>
   )
 }

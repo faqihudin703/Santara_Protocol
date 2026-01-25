@@ -9,6 +9,7 @@ export const CONTRACTS = {
   REDEEM: import.meta.env.VITE_CONTRACT_REDEEM,
   WSAN: import.meta.env.VITE_CONTRACT_WSAN,
   SETTLEMENT: import.meta.env.VITE_CONTRACT_SETTLE,
+  USDC: import.meta.env.VITE_CONTRACT_USDC,
 };
 
 // 2. Define ABIs (Hanya fungsi yang kita butuhkan)
@@ -37,7 +38,11 @@ export const ABIS = {
     'function getWSanRate() view returns (uint256)',
     
     // ===== STATE =====
-    'function lastPriceUpdate() view returns (uint256)'
+    'function lastPriceUpdate() view returns (uint256)',
+    
+    // ===== FEE =====
+    'function swapEthFeeBps() view returns (uint256)',
+    'function swapWSanFeeBps() view returns (uint256)'
   ]),
 
   // Yield Vault (Staking)
@@ -65,6 +70,7 @@ export const ABIS = {
 
   // Redemption (NXS -> USDC)
   REDEEM: parseAbi([
-    'function redeem(uint256 nxsAmount)'
+    'function redeem(uint256 nxsAmount)',
+    'function redeemRate() view returns (uint256)'
   ])
 };
