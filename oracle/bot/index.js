@@ -24,9 +24,9 @@ const MIN_PRICE = 10_000_000;
 const MAX_PRICE = 200_000_000;
 
 const CHECK_INTERVAL_MS = 5_000;
-const HEARTBEAT_SEC = 15 * 60;
+const HEARTBEAT_SEC = 5 * 60;
 const FORCE_PUSH_DIFF = 0.006;
-const TX_TIMEOUT_MS = 180_000;
+const TX_TIMEOUT_MS = 120_000;
 
 /* ───────────────── DATABASE ───────────────── */
 

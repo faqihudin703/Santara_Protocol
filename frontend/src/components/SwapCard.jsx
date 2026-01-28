@@ -5,6 +5,7 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
   useWatchContractEvent,
+  useBalance,
 } from 'wagmi'
 import { parseEther, parseUnits, formatEther } from 'viem'
 import { CONTRACTS, ABIS } from '../config'
@@ -16,7 +17,7 @@ import {
   Info, 
   ExternalLink, 
   Loader2, 
-  AlertTriangle,
+  AlertTriangle, 
   CheckCircle2
 } from 'lucide-react'
 
@@ -39,20 +40,20 @@ export default function SwapCard() {
 
   /* ========= FIAT STATE ========= */
   const [autoOpenedFiat, setAutoOpenedFiat] = useState(false)
-  
+   
   /* ================= READ FEES FROM CONTRACT ================= */
   const { data: ethFeeBps } = useReadContract({
     address: CONTRACTS.SWAP,
     abi: ABIS.SWAP,
     functionName: 'swapEthFeeBps',
   })
-  
+   
   const { data: wSanFeeBps } = useReadContract({
     address: CONTRACTS.SWAP,
     abi: ABIS.SWAP,
     functionName: 'swapWSanFeeBps',
   })
-  
+   
   const activeFeeBps = useMemo(() => {
     if (inputToken === 'ETH') return ethFeeBps ? Number(ethFeeBps) : 30
     if (inputToken === 'wSAN') return wSanFeeBps ? Number(wSanFeeBps) : 10
@@ -66,16 +67,22 @@ export default function SwapCard() {
     [amount]
   )
 
-  /* ================= BALANCES ================= */
-
-  const { data: wsanBalance } = useReadContract({
+  /* ================= BALANCES & REFETCH HANDLERS ================= */
+  const { data: ethBalanceData, refetch: refetchEth } = useBalance({
+    address,
+    query: {
+      enabled: !!address,
+    } 
+  })
+  
+  const { data: wsanBalance, refetch: refetchWsan } = useReadContract({
     address: CONTRACTS.WSAN,
     abi: ABIS.ERC20,
     functionName: 'balanceOf',
     args: [address],
   })
-
-  const { data: idrxBalance } = useReadContract({
+  
+  const { data: idrxBalance, refetch: refetchIdrx } = useReadContract({
     address: CONTRACTS.IDRX,
     abi: ABIS.ERC20,
     functionName: 'balanceOf',
@@ -83,7 +90,6 @@ export default function SwapCard() {
   })
 
   /* ================= PRICE DATA ================= */
-
   const { data: ethToIdrPrice } = useReadContract({
     address: CONTRACTS.SWAP,
     abi: ABIS.SWAP,
@@ -98,10 +104,20 @@ export default function SwapCard() {
       enabled: inputToken === 'wSAN',
     },
   })
+   
+  /* ================= RATE DISPLAY LOGIC ================= */
+  const currentRate = useMemo(() => {
+    if (inputToken === 'ETH' && ethToIdrPrice) {
+      return Number(ethToIdrPrice)
+    }
+    if (inputToken === 'wSAN' && wSanRate) {
+      return Number(formatEther(wSanRate)) 
+    }
+    return 0
+  }, [inputToken, ethToIdrPrice, wSanRate])
 
   /* ================= ALLOWANCE ================= */
-
-  const { data: allowance } = useReadContract({
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: CONTRACTS.WSAN,
     abi: ABIS.ERC20,
     functionName: 'allowance',
@@ -116,18 +132,29 @@ export default function SwapCard() {
     allowance !== undefined &&
     allowance < parsedAmount
 
+  /* ========= DYNAMIC SLIPPAGE LOGIC ========= */
+  const effectiveSlippage = useMemo(() => {
+    if (typeof slippage === 'number') return slippage
+    
+    if (slippage === 'auto') {
+       if (inputToken === 'wSAN') return 1.0
+       return 0.5
+    }
+    return 0.5
+  }, [slippage, inputToken])
+
   /* ================= ESTIMATION WITH FEE ================= */
-  
+   
   const feeAmount = useMemo(() => {
-     if (!amount) return 0n
-     return (parsedAmount * BigInt(activeFeeBps)) / 10000n
+      if (!amount) return 0n
+      return (parsedAmount * BigInt(activeFeeBps)) / 10000n
   }, [amount, parsedAmount, activeFeeBps])
-  
+   
   const netAmount = useMemo(() => {
-     if (!amount) return 0n
-     return parsedAmount - feeAmount
+      if (!amount) return 0n
+      return parsedAmount - feeAmount
   }, [parsedAmount, feeAmount])
-  
+   
   const expectedIDRX = useMemo(() => {
     if (!amount) return 0n
 
@@ -148,7 +175,7 @@ export default function SwapCard() {
 
   const minIDRXOut = useMemo(() => {
     if (!expectedIDRX) return 0n
-    const slippageBps = BigInt(Math.floor(slippage * 100))
+    const slippageBps = BigInt(Math.floor(effectiveSlippage * 100))
     return (expectedIDRX * (10000n - slippageBps)) / 10000n
   }, [expectedIDRX, slippage])
 
@@ -167,8 +194,8 @@ export default function SwapCard() {
 
   const isTxRunning = isPending || isConfirming
 
-  /* ================= EFFECT ================= */
-  
+  /* ================= EFFECT (UI STATE) ================= */
+   
   useEffect(() => {
     if (
       inputToken === 'IDR' && !autoOpenedFiat
@@ -177,7 +204,7 @@ export default function SwapCard() {
       setAutoOpenedFiat(true)
     }
   }, [inputToken, autoOpenedFiat])
-  
+   
   useEffect(() => {
     if (inputToken !== 'IDR') {
       setAutoOpenedFiat(false)
@@ -186,10 +213,17 @@ export default function SwapCard() {
   
   useEffect(() => {
     if (isSuccess) {
-      setAmount('')
+      refetchEth()
+      refetchWsan()
+      refetchIdrx()
+      refetchAllowance()
+      
+      if (lastAction !== 'approve') {
+         setAmount('')
+      }
       setLastAction(null)
     }
-  }, [isSuccess])
+  }, [isSuccess, refetchEth, refetchWsan, refetchIdrx, refetchAllowance])
 
   /* ================= ACTION ================= */
 
@@ -231,12 +265,12 @@ export default function SwapCard() {
       })
     }
   }
-  
+   
   /* ================= UI ================= */
 
   return (
     <div className="bg-[#12141a] border border-gray-800 rounded-3xl p-2 md:p-4 shadow-2xl relative overflow-hidden font-sans">
-      
+       
       {/* HEADER CARD */}
       <div className="flex justify-between items-center px-4 py-3 mb-2">
         <h2 className="text-white font-bold text-lg tracking-tight">Swap</h2>
@@ -267,19 +301,22 @@ export default function SwapCard() {
           <div className="bg-[#0a0b0d] p-4 rounded-2xl border border-gray-800 hover:border-gray-700 transition group focus-within:border-blue-500/50">
             <div className="flex justify-between text-gray-400 text-xs font-medium mb-3">
               <span>You Pay</span>
-              {inputToken === 'wSAN' && (
-                 <span className="flex items-center gap-1.5 text-blue-400">
-                    <Wallet className="w-3 h-3" /> 
-                    Bal: <span className="font-mono text-white">{wsanBalance ? format2(formatEther(wsanBalance)) : '0.0'}</span>
-                 </span>
-              )}
+              <span className="flex items-center gap-1.5 text-blue-400">
+                <Wallet className="w-3 h-3" /> 
+                Bal: <span className="font-mono text-white">
+                  {inputToken === 'ETH' 
+                    ? (ethBalanceData ? format2(ethBalanceData.formatted) : '0.00')
+                    : (wsanBalance ? format2(formatEther(wsanBalance)) : '0.00')
+                  }
+                </span>
+              </span>
             </div>
-            
+             
             <div className="flex justify-between items-center">
               <input
                 type="number"
                 step="0.01"
-                placeholder="0.0"
+                placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={isTxRunning}
@@ -302,50 +339,104 @@ export default function SwapCard() {
              </div>
            </div>
         )}
-
-        {/* --- SLIPPAGE & SETTINGS --- */}
-        {inputToken !== 'IDR' && (
-           <div className="flex justify-between items-center px-2 py-2">
-              <div className="flex gap-4">
-                  {/* Slippage Selector */}
-                  <div className="flex items-center gap-1 text-xs text-gray-500 font-medium">
-                     <Info className="w-3 h-3" /> Slippage
-                     <div className="flex gap-1 ml-2">
-                        {[0.5, 1, 2, 5].map((v) => (
-                           <button 
-                             key={v} 
-                             onClick={() => setSlippage(v)} 
-                             disabled={isTxRunning} 
-                             className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${slippage === v ? 'bg-blue-600/10 text-blue-400 border-blue-500/30' : 'bg-transparent text-gray-600 border-transparent hover:bg-gray-800'}`}>{v}%
-                           </button>
-                        ))}
-                     </div>
-                  </div>
-              </div>
-              
-              {/* Fee Display */}
-              <div className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
-                 <span>Protocol Fee:</span>
-                 <span className="text-orange-400 font-bold">{(activeFeeBps / 100).toFixed(2)}%</span>
-              </div>
-           </div>
-        )}
         
         {/* --- PREVIEW (RECEIVE) --- */}
-        {expectedIDRX > 0n && (
-           <div className="bg-[#0a0b0d] p-4 rounded-2xl border border-gray-800 mt-0">
+        {inputToken !== 'IDR' && (
+           <div className="bg-[#0a0b0d] p-4 rounded-2xl border border-gray-800 mt-2 z-0">
               <div className="flex justify-between text-gray-400 text-xs font-medium mb-2">
                  <span>You Receive (Est.)</span>
               </div>
               <div className="flex justify-between items-center">
-                 <span className="text-2xl md:text-3xl font-mono font-medium text-white truncate pr-2">
-                    {format2(formatEther(minIDRXOut))}
+                 <span className={`text-2xl md:text-3xl font-mono font-medium truncate pr-2 ${expectedIDRX > 0n ? 'text-white' : 'text-gray-600'}`}>
+                    {expectedIDRX > 0n ? format2(formatEther(minIDRXOut)) : '0.00'}
                  </span>
                  <span className="bg-[#1c1f26] text-white px-3 py-1.5 rounded-full text-sm font-bold border border-gray-700 shrink-0 shadow-sm flex items-center gap-2">
                     <div className="w-4 h-4 bg-red-600 rounded-full flex items-center justify-center text-[8px] font-bold">ID</div>
                     IDRX
                  </span>
               </div>
+           </div>
+        )}
+
+        {/* --- LIVE RATE & INFO SECTION --- */}
+        {inputToken !== 'IDR' && (
+           <div className="mt-4 space-y-3">
+              
+              {/* 1. RATE DISPLAY CARD */}
+              <div className="bg-[#0a0b0d] border border-gray-800/50 rounded-xl p-3 flex justify-between items-center shadow-inner">
+                 <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
+                    <Info className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Live Rate</span>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    {currentRate > 0 ? (
+                      <div className="flex items-center gap-2">
+                         <span className="relative flex h-2 w-2">
+                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                           <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                         </span>
+                         <span className="text-xs font-mono font-bold text-gray-200">
+                            1 {inputToken} ≈ {format2(currentRate)} IDRX
+                         </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-600 animate-pulse flex items-center gap-1">
+                         <Loader2 className="w-3 h-3 animate-spin" /> Fetching...
+                      </span>
+                    )}
+                 </div>
+              </div>
+
+              {/* 2. SLIPPAGE & FEE ROW */}
+              <div className="px-1 flex justify-between items-center">
+                 {/* Slippage Selector */}
+                 <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Slippage</span>
+                    <div className="flex bg-[#0a0b0d] rounded-lg p-0.5 border border-gray-800">
+                       
+                       {/* AUTO Dynamic Button */}
+                       <button 
+                          onClick={() => setSlippage('auto')} 
+                          disabled={isTxRunning} 
+                          className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 ${
+                             slippage === 'auto'
+                             ? 'bg-blue-700 text-white shadow-sm border border-blue-600'
+                             : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                          }`}
+                       >
+                          Auto
+                          {slippage === 'auto' && (
+                            <span className="opacity-70 font-bold">({effectiveSlippage}%)</span>
+                          )}
+                       </button>
+
+                       {/* Manual Button */}
+                       {[0.5, 1.0, 2.0].map((v) => (
+                          <button 
+                            key={v} 
+                            onClick={() => setSlippage(v)} 
+                            disabled={isTxRunning} 
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                               slippage === v 
+                               ? 'bg-blue-700 text-white shadow-sm border border-blue-600' 
+                               : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                            }`}
+                          >
+                             {v}%
+                          </button>
+                       ))}
+                    </div>
+                 </div>
+                 
+                 {/* Fee Display */}
+                 <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-gray-500 font-medium">Protocol Fee</span>
+                    <span className="text-[10px] text-orange-400 font-mono font-bold border-b border-orange-500/20 leading-none pb-0.5">
+                       {(activeFeeBps / 100).toFixed(2)}%
+                    </span>
+                 </div>
+              </div>
+
            </div>
         )}
         
@@ -448,7 +539,7 @@ export default function SwapCard() {
           <span className="text-xs font-semibold">Transaction Failed. Check slippage.</span>
         </div>
       )}
-      
+       
       {/* FIAT MODAL */}
       <FiatSettlementGateway 
         isOpen={isFiatModalOpen}

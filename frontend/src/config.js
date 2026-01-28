@@ -24,7 +24,7 @@ export const ABIS = {
   SETTLEMENT: parseAbi([
     'function settleFiatPayment(uint256 amount, uint256 nonce)',
     'function settlementQuotas(address) view returns (uint256,uint256,uint256,uint256,uint256,uint256)',
-    'event FiatSettled(address indexed payer, uint256 amount, bytes32 transferId)',
+    'event FiatPaymentSettled(address indexed payer, uint256 amount, bytes32 transferId, uint256 clientNonce, uint256 blockTimestamp)',
   ]),
 
   // Direct Swap (ETH -> IDRX)

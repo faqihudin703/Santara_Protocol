@@ -34,13 +34,13 @@ export default function VaultCard() {
   const [amount, setAmount] = useState('')
   const [lastAction, setLastAction] = useState(null)
   const queryClient = useQueryClient()
-  
+   
   /* ========= BLOCK TIME (SOURCE OF TRUTH) ========= */
   const { data: block } = useBlock({ watch: true })
 
   const chainNow = useMemo(() => {
     if (!block) return null
-    return Number(block.timestamp) // seconds
+    return Number(block.timestamp)
   }, [block])
 
   /* ========= AMOUNT ========= */
@@ -49,7 +49,8 @@ export default function VaultCard() {
     [amount]
   )
 
-  /* ========= READ ========= */
+  /* ========= READ DATA & REFETCH HANDLERS ========= */
+  
   const { data: earned } = useReadContract({
     address: CONTRACTS.VAULT,
     abi: ABIS.VAULT,
@@ -57,21 +58,21 @@ export default function VaultCard() {
     args: [address],
     query: { refetchInterval: 5000 },
   })
-
-  const { data: staked } = useReadContract({
+  
+  const { data: staked, refetch: refetchStaked } = useReadContract({
     address: CONTRACTS.VAULT,
     abi: ABIS.VAULT,
     functionName: 'balanceOf',
     args: [address],
   })
-
-  const { data: totalSupply } = useReadContract({
+  
+  const { data: totalSupply, refetch: refetchTotalSupply } = useReadContract({
     address: CONTRACTS.VAULT,
     abi: ABIS.VAULT,
     functionName: 'totalSupply',
   })
 
-  const { data: allowance } = useReadContract({
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: CONTRACTS.IDRX,
     abi: ABIS.ERC20,
     functionName: 'allowance',
@@ -79,7 +80,7 @@ export default function VaultCard() {
     query: { enabled: !!address && !!amount },
   })
   
-  const { data: idrxWalletBalance } = useReadContract({
+  const { data: idrxWalletBalance, refetch: refetchWallet } = useReadContract({
     address: CONTRACTS.IDRX,
     abi: ABIS.ERC20,
     functionName: 'balanceOf',
@@ -104,8 +105,8 @@ export default function VaultCard() {
     abi: ABIS.VAULT,
     functionName: 'lastEpochTime',
   })
-  
-  /* ========= STAKING WINDOW (V3) ========= */
+   
+  /* ========= STAKING WINDOW ========= */
   const { data: stakingWindow } = useReadContract({
     address: CONTRACTS.VAULT,
     abi: ABIS.VAULT,
@@ -123,7 +124,7 @@ export default function VaultCard() {
     allowance !== undefined && allowance < parsedAmount
 
   const hasReward = earned && earned > 0n
-  
+   
   const formatDuration = (seconds) => {
     if (seconds <= 0) return '0m'
 
@@ -138,20 +139,20 @@ export default function VaultCard() {
 
   /* ========= GLOBAL EPOCH COUNTDOWN ========= */
   const nextEpochIn = useMemo(() => {
-    if (!epochDuration || !lastEpochTime || !chainNow)
+    if (!epochDuration || !epochStartTime || !chainNow)
       return '--'
 
     const duration = Number(epochDuration)
-    const elapsed = Math.max(
-      0,
-      chainNow - Number(lastEpochTime)
-    )
-    const remaining = duration - (elapsed % duration)
+    const start = Number(epochStartTime)
+    
+    const timeSinceGenesis = Math.max(0, chainNow - start)
+    const timeIntoCurrentEpoch = timeSinceGenesis % duration
+    const remaining = duration - timeIntoCurrentEpoch
 
     return formatDuration(remaining)
-  }, [epochDuration, lastEpochTime, chainNow])
-  
-  /* ========= STAKING COUNTDOWN (ALWAYS ON) ========= */
+  }, [epochDuration, epochStartTime, chainNow])
+   
+  /* ========= STAKING COUNTDOWN ========= */
   const stakingCountdown = useMemo(() => {
     if (
       !stakingWindow ||
@@ -165,103 +166,65 @@ export default function VaultCard() {
     const window = Number(stakingWindow)
     const duration = Number(epochDuration)
 
-    const openUntil = start + window
+    const timeSinceGenesis = chainNow - start
+    const currentEpochStart = start + Math.floor(timeSinceGenesis / duration) * duration
+    const openUntil = currentEpochStart + window
 
-    // 🔓 staking OPEN
-    if (chainNow >= start && chainNow < openUntil) {
-      return {
-        isOpen: true,
-        remaining: openUntil - chainNow,
-      }
+    if (chainNow < openUntil) {
+      return { isOpen: true, remaining: openUntil - chainNow }
     }
 
-    // 🔒 staking CLOSED → next epoch
-    const epochsPassed = Math.floor((chainNow - start) / duration) + 1
-
-    const nextOpen = start + epochsPassed * duration
-
-    return {
-      isOpen: false,
-      remaining: Math.max(0, nextOpen - chainNow),
-    }
+    const nextEpochStart = currentEpochStart + duration
+    return { isOpen: false, remaining: nextEpochStart - chainNow }
   }, [stakingWindow, epochStartTime, epochDuration, chainNow])
 
   const isStakingOpen = stakingCountdown?.isOpen
 
-  /* ========= EPOCH PROGRESS (0 → 1) ========= */
+  /* ========= EPOCH PROGRESS (CYCLIC) ========= */
   const epochProgress = useMemo(() => {
-    if (!epochDuration || !lastEpochTime || !chainNow)
+    if (!epochDuration || !epochStartTime || !chainNow)
       return 0
     
     const duration = Number(epochDuration)
-    const elapsed = Math.max(
-      0,
-      chainNow - Number(lastEpochTime)
-    )
+    const start = Number(epochStartTime)
+    const timeSinceGenesis = Math.max(0, chainNow - start)
+    const currentCycleElapsed = timeSinceGenesis % duration
 
-    return Math.min(elapsed / duration, 1)
-  }, [epochDuration, lastEpochTime, chainNow])
+    return Math.min(currentCycleElapsed / duration, 1)
+  }, [epochDuration, epochStartTime, chainNow])
 
-  /* ========= ESTIMATED REWARD (OFF-CHAIN) ========= */
+  /* ========= ESTIMATED REWARD ========= */
   const estimatedReward = useMemo(() => {
-    if (
-      !staked ||
-      !totalSupply ||
-      totalSupply === 0n ||
-      !epochReward
-    )
+    if (!staked || !totalSupply || totalSupply === 0n || !epochReward)
       return 0n
 
-    const userShare =
-      (staked * epochReward) / totalSupply
-    
-    const progressScaled = BigInt(
-      Math.floor(epochProgress * 1_000_000)
-    )
+    const userShare = (staked * epochReward) / totalSupply
+    const progressScaled = BigInt(Math.floor(epochProgress * 1_000_000))
 
     return (userShare * progressScaled) / 1_000_000n
   }, [staked, totalSupply, epochReward, epochProgress])
-  
+   
   const maxEpochReward = useMemo(() => {
-    if (
-      !staked ||
-      !totalSupply ||
-      totalSupply === 0n ||
-      !epochReward
-    )
+    if (!staked || !totalSupply || totalSupply === 0n || !epochReward)
       return 0n
     
     return (staked * epochReward) / totalSupply
   }, [staked, totalSupply, epochReward])
-  
+   
   const isMaxed = useMemo(() => {
-    return (
-      maxEpochReward > 0n &&
-      estimatedReward >= maxEpochReward
-    )
+    return (maxEpochReward > 0n && estimatedReward >= maxEpochReward)
   }, [estimatedReward, maxEpochReward])
-  
+   
   const rewardProgressPct = useMemo(() => {
-    if (
-      maxEpochReward === 0n ||
-      estimatedReward === 0n
-    )
-      return 0
-
-    const pct =
-      Number((estimatedReward * 10_000n) / maxEpochReward) / 100
-
+    if (maxEpochReward === 0n || estimatedReward === 0n) return 0
+    const pct = Number((estimatedReward * 10_000n) / maxEpochReward) / 100
     return Math.min(pct, 100)
   }, [estimatedReward, maxEpochReward])
 
   /* ========= TX ========= */
-  const { writeContract, data: hash, isPending } =
-    useWriteContract()
+  const { writeContract, data: hash, isPending } = useWriteContract()
 
-  const {
-    isLoading: isConfirming,
-    isSuccess,
-  } = useWaitForTransactionReceipt({
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
     confirmations: 1,
   })
@@ -273,6 +236,7 @@ export default function VaultCard() {
     if (!amount || isTxRunning) return
 
     if (needsApproval) {
+      setLastAction('approve')
       writeContract({
         address: CONTRACTS.IDRX,
         abi: ABIS.ERC20,
@@ -280,6 +244,7 @@ export default function VaultCard() {
         args: [CONTRACTS.VAULT, parsedAmount],
       })
     } else {
+      setLastAction('stake')
       writeContract({
         address: CONTRACTS.VAULT,
         abi: ABIS.VAULT,
@@ -291,6 +256,7 @@ export default function VaultCard() {
 
   const handleHarvest = () => {
     if (!hasReward || isTxRunning) return
+    setLastAction('harvest')
     writeContract({
       address: CONTRACTS.VAULT,
       abi: ABIS.VAULT,
@@ -300,24 +266,34 @@ export default function VaultCard() {
 
   const handleExit = () => {
     if (isTxRunning) return
+    setLastAction('exit')
     writeContract({
       address: CONTRACTS.VAULT,
       abi: ABIS.VAULT,
       functionName: 'exit',
     })
   }
-
+  
   useEffect(() => {
-    if (isSuccess) return 
-    queryClient.invalidateQueries()
-    setAmount('')
-    setLastAction(null)
-  }, [isSuccess])
+    if (isSuccess) {
+      refetchStaked()
+      refetchWallet()
+      refetchTotalSupply()
+      refetchAllowance()
+      
+      if (lastAction === 'stake') {
+         setAmount('')
+      }
+      
+      setLastAction(null)
+      queryClient.invalidateQueries({ queryKey: ['vaultData'] })
+    }
+  }, [isSuccess, lastAction, refetchStaked, refetchWallet, refetchTotalSupply, refetchAllowance, queryClient])
 
   /* ========= UI ========= */
   return (
     <div className="bg-[#12141a] border border-gray-800 rounded-3xl p-4 md:p-6 shadow-2xl relative overflow-hidden font-sans">
-      
+       
       {/* HEADER WITH DECORATION */}
       <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
         <Lock className="w-40 h-40" />
@@ -378,7 +354,6 @@ export default function VaultCard() {
             className="h-full bg-gradient-to-r from-blue-500 to-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)] transition-[width] duration-700 ease-out relative"
             style={{ width: `${rewardProgressPct}%` }}
           >
-              {/* Shimmer Effect */}
               <div className="absolute top-0 left-0 bottom-0 right-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-full -translate-x-full animate-[shimmer_2s_infinite]"></div>
           </div>
         </div>
@@ -386,7 +361,7 @@ export default function VaultCard() {
         <div className="flex justify-between items-center mt-3 text-[10px] text-gray-500 relative z-10">
              <span>{Math.floor(rewardProgressPct)}% accumulated</span>
              <span className="flex items-center gap-1">
-                Epoch ends in <span className="text-gray-300 font-mono">{nextEpochIn}</span>
+               Epoch ends in <span className="text-gray-300 font-mono">{nextEpochIn}</span>
              </span>
         </div>
       </div>
@@ -425,7 +400,7 @@ export default function VaultCard() {
          <div className="flex items-center justify-between">
             <input
                type="number"
-               placeholder="0.0"
+               placeholder="0.00"
                value={amount}
                onChange={(e) => setAmount(e.target.value)}
                disabled={isTxRunning || !isStakingOpen}

@@ -12,8 +12,8 @@ export default function HomeView({ setTab }) {
           Live on Base Sepolia
         </div>
         
-        <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight leading-tight">
-          Santara <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600">Protocol</span>
+        <h1 className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600">
+          Santara Protocol
         </h1>
         
         <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">

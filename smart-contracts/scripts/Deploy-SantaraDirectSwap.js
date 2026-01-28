@@ -22,7 +22,6 @@ async function main() {
   // Argumen Initialize:
   // 1. _wSan, 2. _idrx, 3. _dex, 4. admin,
   // 5. oracle, 6. treasury, 7. _ethFeeBps, 8. _wSanFeeBps
-  // Kita set admin, oracle, treasury ke Deployer semua biar simpel demo-nya
   const args = [
     WSAN_ADDRESS,
     IDRX_ADDRESS,

@@ -6,7 +6,7 @@ import {
   useReadContract,
   useBlock,
 } from 'wagmi'
-import { parseUnits, formatEther } from 'viem'
+import { parseUnits, formatEther, decodeEventLog } from 'viem'
 import { CONTRACTS, ABIS } from '../config'
 import { createPortal } from 'react-dom'
 import { 
@@ -19,7 +19,8 @@ import {
   AlertTriangle,
   ArrowRight,
   ShieldCheck,
-  Copy
+  Copy,
+  FileText
 } from 'lucide-react'
 
 const formatIDR = (num) =>
@@ -36,6 +37,7 @@ export default function FiatSettlementGateway({ isOpen, onClose }) {
   const [nonceSeed] = useState(() => Math.floor(Math.random() * 1_000_000_000))
   const [nonceCounter, setNonceCounter] = useState(0)
   const [selectedBank, setSelectedBank] = useState('BCA')
+  const [receiptId, setReceiptId] = useState(null)
   
   const generateClientNonce = () => {
     const n = BigInt(nonceSeed) * 1_000_000n + BigInt(nonceCounter)
@@ -74,14 +76,18 @@ export default function FiatSettlementGateway({ isOpen, onClose }) {
   /* ===== TX ===== */
   const { writeContract, data: hash, isPending } =
     useWriteContract()
-
-  const { isLoading: isConfirming, isSuccess } =
-    useWaitForTransactionReceipt({ hash })
+  
+  const { 
+    isLoading: isConfirming, 
+    isSuccess, 
+    data: txReceipt 
+  } = useWaitForTransactionReceipt({ hash })
 
   useEffect(() => {
     if (isOpen) {
       setStep(1)
       setAmount('')
+      setReceiptId(null)
       setNonce(generateClientNonce())
     }
   }, [isOpen])
@@ -99,11 +105,34 @@ export default function FiatSettlementGateway({ isOpen, onClose }) {
     setStep(3)
   }
   
-  useEffect(() => {
-    if (isSuccess) {
+ useEffect(() => {
+    if (isSuccess && txReceipt) {
+
+      for (const log of txReceipt.logs) {
+        if (log.address.toLowerCase() !== CONTRACTS.SETTLEMENT.toLowerCase()) continue;
+
+        try {
+          const event = decodeEventLog({
+            abi: ABIS.SETTLEMENT,
+            data: log.data,
+            topics: log.topics,
+          })
+          
+          if (event.eventName === 'FiatPaymentSettled') {
+             const tId = event.args.transferId || event.args[2];
+             
+             if (tId) {
+                setReceiptId(tId.toString())
+                break;
+             }
+          }
+        } catch (e) {
+           continue 
+        }
+      }
       setStep(4)
     }
-  }, [isSuccess])
+  }, [isSuccess, txReceipt])
 
   if (!isOpen) return null
 
@@ -167,7 +196,7 @@ export default function FiatSettlementGateway({ isOpen, onClose }) {
                     <span className="text-gray-500 font-mono text-xl mr-2">Rp</span>
                     <input
                        type="number"
-                       placeholder="0"
+                       placeholder="0.00"
                        value={amount}
                        onChange={(e) => setAmount(e.target.value)}
                        className="bg-transparent text-2xl font-mono text-white outline-none w-full placeholder:text-gray-700"
@@ -285,9 +314,33 @@ export default function FiatSettlementGateway({ isOpen, onClose }) {
                </div>
                
                <h4 className="text-2xl font-bold text-white mb-1">Payment Settled</h4>
-               <p className="text-sm text-gray-400 mb-8">
+               <p className="text-sm text-gray-400 mb-6">
                   <span className="text-green-400 font-mono font-bold">Rp {formatIDR(amount)}</span> has been credited.
                </p>
+               
+               {receiptId && (
+                <div className="bg-[#0a0b0d] p-3 rounded-xl border border-gray-800 mb-6 flex justify-between items-center group relative overflow-hidden">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+                  <div className="flex items-center gap-3">
+                    <div className="bg-[#1c1f26] p-2 rounded-lg text-blue-400">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Bank Receipt ID</p>
+                      <p className="text-xs font-mono text-gray-300 max-w-[200px] truncate" title={receiptId}>
+                        {receiptId.slice(0, 16)}...{receiptId.slice(-4)}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText(receiptId)}
+                    className="p-2 hover:bg-[#1c1f26] rounded-lg text-gray-500 hover:text-white transition"
+                    title="Copy Full ID"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+               )}
                
                <button onClick={onClose} className="w-full bg-[#1c1f26] hover:bg-gray-800 border border-gray-700 text-white font-bold py-3.5 rounded-xl transition">
                   Done

@@ -16,7 +16,6 @@ import {
   AlertTriangle,
   Info,
   RefreshCw,
-  TrendingUp,
   Landmark
 } from 'lucide-react'
 
@@ -48,7 +47,7 @@ export default function RedeemCard() {
   }, [rateData])
   
   /* ================= READ TREASURY LIQUIDITY (NEW) ================= */
-  const { data: treasuryLiquidityRaw } = useReadContract({
+  const { data: treasuryLiquidityRaw, refetch: refetchTreasury } = useReadContract({
     address: CONTRACTS.USDC,
     abi: ABIS.ERC20,
     functionName: 'balanceOf',
@@ -76,7 +75,7 @@ export default function RedeemCard() {
 
   /* ================= BALANCE ================= */
 
-  const { data: nxsBalance } = useReadContract({
+  const { data: nxsBalance, refetch: refetchBalance } = useReadContract({
     address: CONTRACTS.NXS,
     abi: ABIS.ERC20,
     functionName: 'balanceOf',
@@ -85,7 +84,7 @@ export default function RedeemCard() {
 
   /* ================= ALLOWANCE ================= */
 
-  const { data: allowance } = useReadContract({
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: CONTRACTS.NXS,
     abi: ABIS.ERC20,
     functionName: 'allowance',
@@ -141,10 +140,15 @@ export default function RedeemCard() {
 
   useEffect(() => {
     if (isSuccess) {
-      setAmount('')
+      if (lastAction === 'redeem') {
+        setAmount('')
+      }
       setTimeout(() => setLastAction(null), 3000)
+      refetchBalance()
+      refetchTreasury()
+      refetchAllowance()
     }
-  }, [isSuccess])
+  }, [isSuccess, lastAction, refetchBalance, refetchTreasury, refetchAllowance])
 
   /* ================= UI ================= */
 
@@ -174,14 +178,14 @@ export default function RedeemCard() {
               <span>You Redeem</span>
               <span className="flex items-center gap-1.5 text-orange-400">
                  <Wallet className="w-3 h-3" /> 
-                 Bal: <span className="font-mono text-white">{nxsBalance ? format2(formatEther(nxsBalance)) : '0.0'}</span>
+                 Bal: <span className="font-mono text-white">{nxsBalance ? format2(formatEther(nxsBalance)) : '0.00'}</span>
               </span>
            </div>
            
            <div className="flex justify-between items-center">
               <input
                  type="number"
-                 placeholder="0.0"
+                 placeholder="0.00"
                  value={amount}
                  onChange={(e) => setAmount(e.target.value)}
                  disabled={isTxRunning}
@@ -210,7 +214,7 @@ export default function RedeemCard() {
                   {isRateLoading ? (
                      <Loader2 className="w-3 h-3 text-orange-400 animate-spin" />
                   ) : (
-                     <TrendingUp className="w-3 h-3 text-green-500" />
+                     <Info className="w-3 h-3 text-green-500" />
                   )}
                   
                   <span className="text-[10px] text-gray-400 font-medium">Rate:</span>
