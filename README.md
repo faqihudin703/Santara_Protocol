@@ -8,9 +8,21 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Status](https://img.shields.io/badge/Status-Protocol%20Live-orange)
 
+---
+
 ## 📖 Overview
 
-**Santara Protocol** is a decentralized infrastructure layer designed to bring the Indonesian Rupiah (IDR) on-chain. It solves the friction of high-fee "double conversion" (IDR → USD → ETH) by allowing direct swaps between ETH and a Rupiah-pegged stablecoin (**IDRX**) using real-time market data from local exchanges.
+**Santara Protocol** is an end-to-end decentralized financial infrastructure designed to bring the Indonesian Rupiah (IDR) on-chain. It bridges the gap between local Indonesian banking and global DeFi by creating a **circular economy** on Base Sepolia.
+
+The protocol solves the friction of high-fee "double conversion" (IDR → USD → ETH) through three core pillars:
+
+1.  **Direct Settlement (Swap):** Seamlessly swap ETH for Rupiah-pegged stablecoins (**IDRX**) using a custom Oracle that mirrors real-time Indodax market rates.
+2.  **Sustainable Yield (Vault):** A savings protocol where users can stake IDRX to earn **Nexus (NXS)** rewards, simulating a high-yield crypto savings account.
+3.  **Guaranteed Exit (Redemption):** A Treasury-backed mechanism allowing users to "cash out" their NXS rewards directly into **USDC**, ensuring guaranteed liquidity for yield farmers.
+
+By combining these modules, Santara creates a complete **"On-Chain Bank"** experience for Indonesian users.
+
+---
 
 ## 🚀 Key Features
 
@@ -19,7 +31,7 @@ We eliminated the need for USD intermediaries. Our custom **Oracle Node** fetche
 * **Mechanism:** Swap **ETH directly to IDRX** (and vice-versa) at fair market rates.
 * **Fee Structure:**
     * **ETH Swaps:** 30 BPS (0.30%)
-    * **wSAN (Governance) Swaps:** 10 BPS (0.10%) - *Holder Discount*
+    * **wSAN (Governance) Swaps:** 15 BPS (0.15%) - *Holder Discount*
 * **Safety:** Built-in slippage protection and deadline checks.
 
 ### 2. Fiat Settlement Gateway (On-Ramp)
@@ -44,7 +56,7 @@ Santara Protocol is built on top of the existing **Santara Ecosystem**. It seaml
 * **Wrapped SAN (wSAN):** Supports bridging from existing assets.
 * **Santara DEX:** Used for liquidity routing reference.
 * **Direct Swap Contract:** Acts as the gateway between the new IDRX ecosystem and legacy assets.
-> *Note: The wSAN token and DEX contracts reside in a separate repository and are interacted with via Interfaces (`IWrappedSantaraDEX`).*
+> *Note: The wSAN token and DEX contracts reside in a [Santara Terminal](https://github.com/faqihudin703/Santara_Terminal) Repository and are interacted with via Interfaces (`IWrappedSantaraDEX`).*
 
 ---
 
@@ -73,11 +85,105 @@ The system is deployed in a specific order to ensure dependency resolution:
 
 ---
 
+### 🔐 Step 0: Generate & Setup Keystores
+
+For production security, we segregate duties between the **Deployer** (Admin) and the **Oracle** (Worker).
+This script will generate encrypted keystores and **automatically place them** into the correct service directories.
+
+1.  **Create Generator Script:**
+    In the root folder, create a file named `setup-keys.js`:
+
+    ```javascript
+    const { Wallet } = require("ethers");
+    const fs = require("fs");
+    const path = require("path");
+
+    async function createKey(privateKey, password, relativePath) {
+        if (!privateKey || !password) return;
+        
+        const targetPath = path.resolve(__dirname, relativePath);
+        const dirName = path.dirname(targetPath);
+
+        console.log(`🔐 Encrypting key for: ${relativePath}...`);
+        
+        // Ensure directory exists
+        if (!fs.existsSync(dirName)) {
+            fs.mkdirSync(dirName, { recursive: true });
+        }
+
+        const wallet = new Wallet(privateKey);
+        const encryptedJson = await wallet.encrypt(password);
+        
+        fs.writeFileSync(targetPath, encryptedJson);
+        console.log(`✅ Saved to: ${relativePath}`);
+        console.log(`   Address: ${wallet.address}`);
+        return wallet.address;
+    }
+
+    async function main() {
+        console.log("--- SANTARA KEYSTORE SETUP ---");
+
+        // 1. DEPLOYER WALLET -> Goes to smart-contracts/keystore
+        // Required for deploying contracts
+        await createKey(
+            "PASTE_DEPLOYER_PRIVATE_KEY_HERE", 
+            "PASSWORD_FOR_DEPLOYER", 
+            "./smart-contracts/keystore/deployer_keystore.json"
+        );
+
+        console.log("------------------------------");
+
+        // 2. ORACLE WALLET -> Goes to oracle/bot/keystore
+        // Required for the backend worker
+        await createKey(
+            "PASTE_RELAYER_PRIVATE_KEY_HERE", 
+            "PASSWORD_FOR_RELAYER", 
+            "./oracle/bot/keystore/oracle_keystore.json"
+        );
+        
+        console.log("------------------------------");
+        console.log("🎉 Setup Complete! Don't forget to fund the Oracle Address.");
+    }
+
+    main().then(() => process.exit(0)).catch(console.error);
+    ```
+
+2.  **Run & Auto-Clean:**
+    Execute the script to generate files and immediately remove the script (cleaning up raw keys).
+
+    ```bash
+    # Runs the setup AND deletes the script file upon success
+    node setup-keys.js && rm setup-keys.js
+    ```
+    *(Windows PowerShell: `node setup-keys.js; Remove-Item setup-keys.js`)*
+
+3.  **Verify Setup:**
+    Check that the files are created in their respective folders:
+    * `smart-contracts/keystore/deployer_keystore.json`
+    * `oracle/bot/keystore/oracle_keystore.json`
+
+    Now, simply update your `.env` paths:
+
+    * **In `smart-contracts/.env`:**
+        ```env
+        KEYSTORE_PATH="./keystore/deployer_keystore.json"
+        ```
+
+    * **In `oracle/bot/.env`:**
+        ```env
+        # OPTION A: If running via DOCKER (Recommended for Production)
+        KEYSTORE_PATH=/usr/src/app/keystore/oracle_keystore.json
+        # OPTION B: If running LOCALLY (npm start)
+        # KEYSTORE_PATH=./keystore/oracle_keystore.json
+        ```
+
+---
+
 ### 1️⃣ Step 1: Deploy Smart Contracts
 *The foundation of the protocol. Deploys IDRX, NXS, Vaults, and the Direct Swap logic.*
 
 ```bash
-cd contracts
+cd smart-contracts
 npm install
 cp .env.example .env # Configure KEYSTORE_PATH, KEYSTORE_PASSWORD, RPC_URL & ETHERSCAN_API_KEY
 
@@ -178,11 +284,33 @@ npm run dev
 
 ---
 
+## 🗺️ Roadmap & Hackathon Status
+
+We are currently in the **Testnet Beta** phase for the Base Hackathon, focusing on protocol stability, oracle resilience, and gas optimization.
+
+### ✅ Phase 1: Core Architecture (Completed)
+- [x] **Smart Contract Development:** Deployment of `FiatSettlementGateway`, `SantaraSwap`, and `NXS_Vault`.
+- [x] **Tokenomics:** IDRX (Stablecoin) & NXS (Yield Token) implementation.
+- [x] **Security:** Reentrancy guards, AccessControl, and Treasury logic.
+
+### ✅ Phase 2: Oracle Infrastructure (Completed)
+- [x] **Off-Chain Node:** Indodax API fetcher & On-chain injector script.
+- [x] **Relay API:** Middleware for frontend data consumption.
+- [x] **Health Monitoring:** Heartbeat & Deviation tracking logic.
+
+### 🔄 Phase 3: Hackathon Stabilization (Current Focus)
+- [ ] **Stress Testing:** High-volatility simulation on Base Sepolia.
+- [ ] **Gas Optimization:** Reducing overhead for `pushPrice` transactions.
+- [ ] **UX Polish:** Refining the "Bank Simulation" flow for non-crypto natives.
+
+---
+
+
 ## 🏆 Hackathon Submission
 
 **Built for Base Hackathon 2026.**
 *Focus Area: DeFi, Real World Assets (RWA) & Emerging Markets.*
 
-**License:** MIT
+---
 
-```
+**License:** MIT
