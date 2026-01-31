@@ -284,6 +284,28 @@ npm run dev
 
 ---
 
+## 📊 Oracle Performance & Stability Data
+
+We believe in transparency. The Santara Oracle Node has been running continuously on **Base Sepolia Testnet**. Below is the visualization of 7 days of live performance data, demonstrating our **Gas-Efficient Deviation Threshold Mechanism**.
+
+### 1. Price Tracking Accuracy
+The Oracle (Orange) successfully tracks the Market Price (Purple) while filtering out micro-volatility to save gas.
+
+![Price Comparison](./assets/sharp_comparison_chart.png)
+
+### 2. Deviation Control
+The deviation consistently resets to 0% whenever it hits the **0.6% threshold**, proving the automated update logic works flawlessly.
+
+![Deviation Analysis](./assets/deviation_chart.png)
+
+### 📂 Open Research Data
+For developers and researchers, we provide the raw logs containing over **100,000 data points**:
+👉 **[Download Full Oracle Logs (CSV)](./research_data/oracle_metrics.csv)**
+
+> *Data verification: Search for TX Hash on BaseScan Sepolia corresponding to high deviation events.*
+
+---
+
 ## 🗺️ Roadmap & Hackathon Status
 
 We are currently in the **Testnet Beta** phase for the Base Hackathon, focusing on protocol stability, oracle resilience, and gas optimization.
