@@ -300,7 +300,10 @@ The deviation consistently resets to 0% whenever it hits the **0.6% threshold**,
 
 ### 📂 Open Research Data
 For developers and researchers, we provide the raw logs containing over **100,000 data points**:
-👉 **[Download Full Oracle Logs (CSV)](./research_data/oracle_metrics.csv)**
+* 📥 **Download CSV:** [Direct Download](./research_data/oracle_metrics.csv)
+
+We have verified the dataset integrity on Kaggle:
+* [![Kaggle Dataset](https://img.shields.io/badge/Kaggle-Dataset-20BEFF?logo=kaggle&style=for-the-badge&logoColor=white)](https://www.kaggle.com/datasets/faqihuddin7035/santara-ethidr-oracle-logs-base-sepolia)
 
 > *Data verification: Search for TX Hash on BaseScan Sepolia corresponding to high deviation events.*
 
