@@ -1,7 +1,8 @@
 import time
 import requests
 import uuid
-import sqlite3
+import json
+import os
 import threading 
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +19,7 @@ ORACLE_INTERNAL_URL = "http://localhost:29600/oracle/health"
 BIND_HOST = "0.0.0.0"
 BIND_PORT = 40865
 
-DB_FILE = "oracle_history.db"
+DB_FILE = "oracle_history.json"
 MAX_HISTORY_LIMIT = 25
 
 TRUSTED_ORIGINS = [
@@ -36,78 +37,81 @@ DB_LOCK = threading.Lock()
 # ───────────────── DATABASE MANAGER ─────────────────
 
 def init_db():
+    """Inisialisasi file JSON jika belum ada."""
     try:
         with DB_LOCK:
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute('''CREATE TABLE IF NOT EXISTS prices
-                         (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                          price REAL, 
-                          timestamp INTEGER)''')
-            conn.commit()
-            conn.close()
-            print(f"✅ [DB] Database initialized.")
+            if not os.path.exists(DB_FILE):
+                with open(DB_FILE, 'w') as f:
+                    json.dump([], f)
+                print(f"✅ [JSON] Database file created.")
+            else:
+                try:
+                    with open(DB_FILE, 'r') as f:
+                        json.load(f)
+                    print(f"✅ [JSON] Database loaded.")
+                except json.JSONDecodeError:
+                    with open(DB_FILE, 'w') as f:
+                        json.dump([], f)
+                    print(f"⚠️ [JSON] Corrupt file reset.")
     except Exception as e:
-        print(f"❌ [DB] Init failed: {e}")
+        print(f"❌ [JSON] Init failed: {e}")
 
 def process_price_update(new_price):
+    """Logika sama persis dengan SQL, tapi menggunakan List Python."""
     if not isinstance(new_price, (int, float)): return
     
     with DB_LOCK:
         try:
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            
-            c.execute("SELECT id, price, timestamp FROM prices ORDER BY id ASC")
-            rows = c.fetchall()
+            history = []
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, 'r') as f:
+                    try:
+                        history = json.load(f)
+                    except:
+                        history = []
+
             now = int(time.time())
-            
             should_insert = False
             
-            if len(rows) < 2:
-                if len(rows) == 1:
-                    last_ts = rows[0][2]
+            if len(history) < 2:
+                if len(history) == 1:
+                    last_ts = history[0]['timestamp']
                     if (now - last_ts) > 2: should_insert = True
                 else:
                     should_insert = True
             
             else:
-                prev_id, prev_price, prev_ts = rows[0]
-                curr_id, curr_price, curr_ts = rows[1]
+                
+                curr_price = history[-1]['price']
+                curr_ts = history[-1]['timestamp']
                 
                 if abs(curr_price - new_price) > 1:
                     should_insert = True
-                    
                 elif (now - curr_ts) >= MIN_UPDATE_INTERVAL:
                     should_insert = True
             
             if should_insert:
-                c.execute("INSERT INTO prices (price, timestamp) VALUES (?, ?)", (new_price, now))
+                new_entry = {"price": new_price, "timestamp": now}
+                history.append(new_entry)
                 
-                c.execute("""
-                    DELETE FROM prices 
-                    WHERE id NOT IN (
-                        SELECT id FROM prices ORDER BY id DESC LIMIT 2
-                    )
-                """)
-                conn.commit()
-            
-            conn.close()
+                if len(history) > 2:
+                    history = history[-2:]
+                
+                with open(DB_FILE, 'w') as f:
+                    json.dump(history, f)
+                    
         except Exception as e:
-            print(f"⚠️ [DB] Save failed: {e}")
+            print(f"⚠️ [JSON] Save failed: {e}")
 
 def get_previous_price_snapshot():
+    """Ambil harga 'sebelumnya' (index ke-0 dari 2 data terakhir)."""
     try:
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-        c.execute("SELECT price FROM prices ORDER BY id ASC")
-        rows = c.fetchall()
-        conn.close()
-        
-        if len(rows) == 2:
-            return rows[0][0]
-        elif len(rows) == 1:
-            return rows[0][0]
+        if not os.path.exists(DB_FILE):
+            return None
+        with open(DB_FILE, 'r') as f:
+            history = json.load(f)
+        if len(history) >= 1:
+            return history[0]['price']
         
         return None
     except:
